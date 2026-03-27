@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Factorización LU</title>
+    <style>
+        :root {
+            --primary: #4A90E2;
+            --bg: #F5F7FA;
+            --surface: #FFFFFF;
+            --text: #333333;
+            --border: #E1E8ED;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background-color: var(--surface);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 800px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            margin-top: 0;
+        }
+        .controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        select, button {
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #357ABD;
+        }
+        .matrix-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+        .matrix-grid {
+            display: grid;
+            gap: 5px;
+        }
+        input[type="number"] {
+            width: 60px;
+            height: 40px;
+            text-align: center;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+        .equals {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-left: 4px solid var(--primary);
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .error {
+            border-left-color: #e74c3c;
+            color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Factorización LU</h1>
+    
+    <div class="controls">
+        <div>
+            <label for="dim">Dimensión (3-6):</label>
+            <select id="dim" onchange="buildGrid()">
+                <option value="3">3 x 3</option>
+                <option value="4">4 x 4</option>
+                <option value="5">5 x 5</option>
+                <option value="6">6 x 6</option>
+            </select>
+        </div>
+        <div>
+            <label for="method">Método:</label>
+            <select id="method">
+                <option value="doolittle">Doolittle</option>
+                <option value="crout">Crout</option>
+                <option value="cholesky">Cholesky</option>
+            </select>
+        </div>
+        <button onclick="solve()">Resolver</button>
+    </div>
+
+    <div class="matrix-container" id="matrix-area">
+        </div>
+
+    <div id="output" class="output" style="display: none;"></div>
+</div>
+
+<script>
+    function buildGrid() {
+        const n = parseInt(document.getElementById('dim').value);
+        const container = document.getElementById('matrix-area');
+        container.innerHTML = '';
+
+        // Matriz A
+        const matrixA = document.createElement('div');
+        matrixA.className = 'matrix-grid';
+        matrixA.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.id = `a_${i}_${j}`;
+                input.value = (i === j) ? 2 : 1; // Valores por defecto
+                matrixA.appendChild(input);
+            }
+        }
+
+        // Símbolo de igualdad
+        const equals = document.createElement('div');
+        equals.className = 'equals';
+        equals.innerText = 'X = ';
+
+        // Vector B
+        const matrixB = document.createElement('div');
+        matrixB.className = 'matrix-grid';
+        matrixB.style.gridTemplateColumns = '1fr';
+        for (let i = 0; i < n; i++) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.id = `b_${i}`;
+            input.value = i + 1; // Valores por defecto
+            matrixB.appendChild(input);
+        }
+
+        container.appendChild(matrixA);
+        container.appendChild(equals);
+        container.appendChild(matrixB);
+    }
+
+    // Inicializar la cuadrícula al cargar
+    buildGrid();
+
+    function zeros(n) {
+        return Array(n).fill().map(() => Array(n).fill(0));
+    }
+
+    function solve() {
+        const n = parseInt(document.getElementById('dim').value);
+        const method = document.getElementById('method').value;
+        const outBox = document.getElementById('output');
+        outBox.style.display = 'block';
+        outBox.className = 'output';
+
+        let A = zeros(n);
+        let b = Array(n).fill(0);
+
+        // Leer datos
+        for (let i = 0; i < n; i++) {
+            b[i] = parseFloat(document.getElementById(`b_${i}`).value) || 0;
+            for (let j = 0; j < n; j++) {
+                A[i][j] = parseFloat(document.getElementById(`a_${i}_${j}`).value) || 0;
+            }
+        }
+
+        let L = zeros(n);
+        let U = zeros(n);
+
+        try {
+            if (method === 'doolittle') {
+                for (let i = 0; i < n; i++) {
+                    for (let k = i; k < n; k++) {
+                        let sum = 0;
+                        for (let j = 0; j < i; j++) sum += (L[i][j] * U[j][k]);
+                        U[i][k] = A[i][k] - sum;
+                    }
+                    for (let k = i; k < n; k++) {
+                        if (i === k) L[i][i] = 1;
+                        else {
+                            let sum = 0;
+                            for (let j = 0; j < i; j++) sum += (L[k][j] * U[j][i]);
+                            if (U[i][i] === 0) throw "División por cero en Doolittle (requiere pivoteo).";
+                            L[k][i] = (A[k][i] - sum) / U[i][i];
+                        }
+                    }
+                }
+            } 
+            else if (method === 'crout') {
+                for (let i = 0; i < n; i++) {
+                    U[i][i] = 1;
+                    for (let k = i; k < n; k++) {
+                        let sum = 0;
+                        for (let j = 0; j < i; j++) sum += (L[k][j] * U[j][i]);
+                        L[k][i] = A[k][i] - sum;
+                    }
+                    for (let k = i + 1; k < n; k++) {
+                        let sum = 0;
+                        for (let j = 0; j < i; j++) sum += (L[i][j] * U[j][k]);
+                        if (L[i][i] === 0) throw "División por cero en Crout (requiere pivoteo).";
+                        U[i][k] = (A[i][k] - sum) / L[i][i];
+                    }
+                }
+            } 
+            else if (method === 'cholesky') {
+                // Verificar simetría
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        if (A[i][j] !== A[j][i]) throw "La matriz NO es simétrica. Cholesky requiere simetría.";
+                    }
+                }
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j <= i; j++) {
+                        let sum = 0;
+                        for (let k = 0; k < j; k++) sum += L[i][k] * L[j][k];
+                        if (i === j) {
+                            let val = A[i][i] - sum;
+                            if (val <= 0) throw "La matriz NO es definida positiva. Cholesky falla.";
+                            L[i][j] = Math.sqrt(val);
+                            U[i][j] = L[i][j]; // U es transpuesta de L
+                        } else {
+                            if (L[j][j] === 0) throw "División por cero en Cholesky.";
+                            L[i][j] = (A[i][j] - sum) / L[j][j];
+                            U[j][i] = L[i][j];
+                        }
+                    }
+                }
+            }
+
+            // Sustitución hacia adelante (Ly = b)
+            let y = Array(n).fill(0);
+            for (let i = 0; i < n; i++) {
+                let sum = 0;
+                for (let j = 0; j < i; j++) sum += L[i][j] * y[j];
+                y[i] = (b[i] - sum) / L[i][i];
+            }
+
+            // Sustitución hacia atrás (Ux = y)
+            let x = Array(n).fill(0);
+            for (let i = n - 1; i >= 0; i--) {
+                let sum = 0;
+                for (let j = i + 1; j < n; j++) sum += U[i][j] * x[j];
+                x[i] = (y[i] - sum) / U[i][i];
+            }
+
+            // Formatear salida
+            let res = `ÉXITO (${method.toUpperCase()})\n\n`;
+            res += "Vector Solución X:\n";
+            for(let i=0; i<n; i++) res += `x[${i+1}] = ${x[i].toFixed(4)}\n`;
+            
+            res += "\nMatriz L:\n" + formatMatrix(L);
+            res += "\nMatriz U:\n" + formatMatrix(U);
+            
+            outBox.innerText = res;
+
+        } catch (error) {
+            outBox.className = 'output error';
+            outBox.innerText = `ERROR: ${error}`;
+        }
+    }
+
+    function formatMatrix(M) {
+        return M.map(row => row.map(val => val.toFixed(4).padStart(10, ' ')).join(' ')).join('\n');
+    }
+</script>
+
+</body>
+</html>
